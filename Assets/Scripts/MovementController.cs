@@ -2,107 +2,87 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+[RequireComponent(typeof(Rigidbody2D))]
 public class MovementController : MonoBehaviour
 {
-    private const float AXIS_THRESHOLD = 0.02f;
-    private const float MAX_X_SPEED = 10f;
+    
+    public float xVelocity = 140f;
+    public float jumpVelocity = 500f;
+    public Vector2 groundCheckRadius;
+    public LayerMask whatIsGround;
 
-    [Range(1, 10)]
-    public float jumpVelocity;
-    public float fallMultiplier = 2.5f;
-    public float lowJumpMultiplier = 2f;
+    public float fallMultiplier = 5f;
+    public float lowJumpMultiplier = 2.5f;
 
     [SerializeField]
     private Transform groundCheck;
 
-    [SerializeField]
-    private Vector2 groundRadius = new Vector2(0.2f, 0.2f);
+    private Rigidbody2D rb;
+    private float inputX;
+    private bool jumpPressed = false;
+    private bool jumpStillPressed = false;
+    private bool grounded = false;
+    private Vector2 newVel = Vector2.zero;
+    private Vector2 pointA, pointB;
 
-    [SerializeField]
-    private LayerMask whatIsGround;
-
-    private bool grounded = true;
-    private bool holdingJump = false;
-    private Rigidbody2D rb2d;
-    private Vector2 inputDir = new Vector2();
-    private Vector2 prevVel = new Vector2();
-    private Vector2 currentVel = new Vector2();
-    private bool pressedJump = false;
-
-    private BoxCollider2D objCollider;
+    private void Awake()
+    {
+        rb = GetComponent<Rigidbody2D>();
+    }
 
     void Start()
     {
-        rb2d = GetComponent<Rigidbody2D>();
-        objCollider = GetComponent<BoxCollider2D>();
+        pointA = new Vector2(groundCheck.position.x - groundCheckRadius.x, groundCheck.position.y - groundCheckRadius.y);
+        pointB = new Vector2(groundCheck.position.x + groundCheckRadius.x, groundCheck.position.y + groundCheckRadius.y);
+        Debug.Log("Init");
+        Debug.Log(pointA);
+        Debug.Log(pointB);
     }
 
-    // Input
-    // Update
-    // Render
-
-    private void Update()
+    void Update()
     {
-        var hAxis = Input.GetAxis("Horizontal");
-        if (hAxis > AXIS_THRESHOLD || hAxis < -AXIS_THRESHOLD)
-        {
-            inputDir.x = hAxis;
-        }
-        else
-        {
-            inputDir.x = 0;
-        }
-        inputDir.Normalize();
-        var vAxis = Input.GetAxis("Vertical");
-        if (vAxis > AXIS_THRESHOLD || vAxis < -AXIS_THRESHOLD)
-        {
-            inputDir.y = 0; // vAxis;
-        }
-        else
-        {
-            inputDir.y = 0;
-        }
-        
-
-
-        pressedJump = Input.GetButtonDown("Jump");
-        holdingJump = Input.GetButton("Jump");
+        inputX = Input.GetAxis("Horizontal");
+        jumpPressed |= Input.GetButtonDown("Jump");
+        jumpStillPressed = Input.GetButton("Jump");
         grounded = IsGrounded();
     }
 
     private void FixedUpdate()
     {
-        currentVel.x = inputDir.x * 800f * Time.fixedDeltaTime;
-        rb2d.velocity = new Vector2(currentVel.x, rb2d.velocity.y);
-        if (grounded && pressedJump)
+        newVel.x = inputX * xVelocity; 
+        newVel.y = rb.velocity.y;
+        if(jumpPressed && grounded)
         {
-            rb2d.velocity = Vector2.up * jumpVelocity;
+            jumpPressed = false;
+            newVel.y += jumpVelocity;
         }
 
-        if (rb2d.velocity.y < 0)
+        if (newVel.y < 0)
         {
-            rb2d.velocity += Vector2.up * Physics2D.gravity.y * (fallMultiplier - 1) * Time.fixedDeltaTime;
+            newVel.y += Physics2D.gravity.y * fallMultiplier * Time.fixedDeltaTime;
         }
-        else if (rb2d.velocity.y > 0 && !holdingJump)
+        else if (newVel.y > 0 && !jumpStillPressed)
         {
-            rb2d.velocity += Vector2.up * Physics2D.gravity.y * (lowJumpMultiplier - 1) * Time.fixedDeltaTime;
+            newVel.y += Physics2D.gravity.y * lowJumpMultiplier * Time.fixedDeltaTime;
         }
+        rb.velocity = newVel;
     }
 
     private bool IsGrounded()
     {
-        var collider = Physics2D.OverlapArea(
-            new Vector2(groundCheck.position.x - groundRadius.x, groundCheck.position.y - groundRadius.y), 
-            new Vector2(groundCheck.position.x + groundRadius.x, groundCheck.position.y + groundRadius.y),  
-            whatIsGround);
-        Debug.Log(collider != null ? "Is Grounded" : "Not Grounded");
-        return collider != null;
+        pointA.x = groundCheck.position.x - groundCheckRadius.x;
+        pointA.y = groundCheck.position.y - groundCheckRadius.y;
+        pointB.x = groundCheck.position.x + groundCheckRadius.x;
+        pointB.y = groundCheck.position.y + groundCheckRadius.y;
+        Debug.Log(pointA);
+        Debug.Log(pointB);
+        var result = Physics2D.OverlapArea(pointA, pointB, whatIsGround) != null;
+        return result;
     }
 
     private void OnDrawGizmosSelected()
     {
-        Gizmos.color = new Color(1, 1, 0, 0.75f);
-        Gizmos.DrawCube(groundCheck.position, groundRadius);
+        Gizmos.DrawCube(groundCheck.position, groundCheckRadius);
     }
 
 }
