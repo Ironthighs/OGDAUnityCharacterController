@@ -15,15 +15,24 @@ public class MovementController : MonoBehaviour
     public float lowJumpMultiplier = 2.5f;
 
     [SerializeField]
+    private LayerMask layersToWallJump;
+
+    [SerializeField]
     private Transform groundCheck;
 
     private Rigidbody2D rb;
     private float inputX;
+    private float inputXDirection;
     private bool jumpPressed = false;
     private bool jumpStillPressed = false;
     private bool grounded = false;
     private Vector2 newVel = Vector2.zero;
     private Vector2 pointA, pointB;
+
+    private bool canGrabWall = false;
+    private bool isGrabbingWall = false;
+    private Vector2 jumpDir = Vector2.one.normalized;
+    private float grabbedWallDirection = 0f;
 
     private void Awake()
     {
@@ -42,29 +51,77 @@ public class MovementController : MonoBehaviour
     void Update()
     {
         inputX = Input.GetAxis("Horizontal");
+        inputXDirection = Mathf.Sign(inputX);
         jumpPressed |= Input.GetButtonDown("Jump");
         jumpStillPressed = Input.GetButton("Jump");
         grounded = IsGrounded();
+
+        canGrabWall = !grounded;
+
+        Debug.Log("Layer mask: " + layersToWallJump.value);
+
+        if(!isGrabbingWall)
+        {
+            RaycastHit2D hit = Physics2D.Raycast(transform.position, transform.TransformDirection(Vector3.right * inputXDirection), 0.6f, layersToWallJump.value);
+            // Does the ray intersect any objects excluding the player layer
+            if (canGrabWall && hit.collider != null)
+            {
+                isGrabbingWall = true;
+                grabbedWallDirection = inputXDirection;
+                Debug.DrawRay(transform.position, transform.TransformDirection(Vector3.right * inputXDirection) * hit.distance, Color.yellow);
+                Debug.Log("Did Hit");
+            }
+            else
+            {
+                //            isGrabbingWall = false;
+                Debug.DrawRay(transform.position, transform.TransformDirection(Vector3.right * inputXDirection) * 0.6f, Color.white);
+                Debug.Log("Did not Hit");
+            }
+        }
     }
 
     private void FixedUpdate()
     {
-        newVel.x = inputX * xVelocity; 
+        newVel.x = inputX * xVelocity;
         newVel.y = rb.velocity.y;
-        if(jumpPressed && grounded)
+
+        if(isGrabbingWall)
         {
-            jumpPressed = false;
-            newVel.y += jumpVelocity;
+            Debug.Log("Is Grabbing Wall");
+            newVel.x = 0;
+            newVel.y = 0;
+            rb.gravityScale = 0;
+
+            if(jumpPressed)
+            {
+                jumpPressed = false;
+                newVel.y = jumpDir.y * jumpVelocity;
+                newVel.x = jumpDir.x * -grabbedWallDirection * xVelocity;
+                isGrabbingWall = false;
+                rb.gravityScale = 1;
+            }
+        }
+        else
+        {
+            if(jumpPressed && grounded)
+            {
+                jumpPressed = false;
+                newVel.y += jumpVelocity;
+            }
+
+            if (newVel.y < 0)
+            {
+                newVel.y += Physics2D.gravity.y * fallMultiplier * Time.fixedDeltaTime;
+            }
+            else if (newVel.y > 0 && !jumpStillPressed)
+            {
+                newVel.y += Physics2D.gravity.y * lowJumpMultiplier * Time.fixedDeltaTime;
+            }
+
+            //newVel.x = newVel.x + (inputX * xVelocity);
+            
         }
 
-        if (newVel.y < 0)
-        {
-            newVel.y += Physics2D.gravity.y * fallMultiplier * Time.fixedDeltaTime;
-        }
-        else if (newVel.y > 0 && !jumpStillPressed)
-        {
-            newVel.y += Physics2D.gravity.y * lowJumpMultiplier * Time.fixedDeltaTime;
-        }
         rb.velocity = newVel;
     }
 
@@ -74,9 +131,7 @@ public class MovementController : MonoBehaviour
         pointA.y = groundCheck.position.y - groundCheckRadius.y;
         pointB.x = groundCheck.position.x + groundCheckRadius.x;
         pointB.y = groundCheck.position.y + groundCheckRadius.y;
-        Debug.Log(pointA);
-        Debug.Log(pointB);
-        var result = Physics2D.OverlapArea(pointA, pointB, whatIsGround) != null;
+        var result = Physics2D.OverlapArea(pointA, pointB, whatIsGround.value) != null;
         return result;
     }
 
